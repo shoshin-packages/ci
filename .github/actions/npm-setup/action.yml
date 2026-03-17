@@ -1,0 +1,39 @@
+name: Setup Node.js environment
+description: >
+  Настраивает Node.js, git, npm-реестр GitHub Packages и устанавливает зависимости.
+  Заменяет якоря .git_config, .npm_registry_setup и .npm_install из GitLab CI.
+
+inputs:
+  token:
+    description: GitHub token для аутентификации в npm-реестре
+    required: true
+  node-version:
+    description: Версия Node.js
+    default: "22"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js с кешем npm
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Настройка git для CI-бота
+      shell: bash
+      run: |
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+
+    - name: Настройка npm-реестра GitHub Packages
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.token }}
+      run: |
+        echo "@shoshin-packages:registry=https://npm.pkg.github.com" >> "$HOME/.npmrc"
+        echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> "$HOME/.npmrc"
+
+    - name: Установка зависимостей
+      shell: bash
+      run: npm ci

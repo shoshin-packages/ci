@@ -1,0 +1,103 @@
+# Переиспользуемый воркфлоу для публикации документации.
+# На main/master — деплой на GitHub Pages через официальные actions.
+# На PR — деплой превью через rossjrw/pr-preview-action (замена GitLab Pages path_prefix).
+# Превью доступно по адресу: https://<org>.github.io/<repo>/pr-preview/pr-<number>/
+# Подключение: uses: shoshin-packages/ci/.github/workflows/docs/publish.yml@main
+
+name: Docs Publish
+
+on:
+  workflow_call:
+    inputs:
+      docs-artifact-name:
+        # Получить из output воркфлоу docs/build.yml: needs.build.outputs.artifact-name
+        description: Имя артефакта с собранной документацией
+        type: string
+        required: true
+      preview-branch:
+        # Ветка должна существовать в репозитории и быть настроена как источник GitHub Pages
+        description: Ветка для хранения превью PR (должна быть настроена как GitHub Pages source)
+        type: string
+        default: gh-pages
+    secrets:
+      token:
+        # Для deploy-pages: нужен pages: write.
+        # Для deploy-preview: нужен contents: write (push в gh-pages) и pull-requests: write (комментарий).
+        description: GitHub token для деплоя Pages и превью PR (передавать secrets.GITHUB_TOKEN)
+        required: true
+
+jobs:
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    # Деплоим на Pages только с основной ветки
+    if: >
+      github.actor != 'github-actions[bot]' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      # pages: write — загрузка и деплой артефакта на GitHub Pages
+      pages: write
+      # contents: read — минимальные права для скачивания артефакта
+      contents: read
+    environment:
+      # Привязка к environment github-pages отображает URL деплоя в интерфейсе GitHub
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Скачивание артефакта документации
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.docs-artifact-name }}
+          path: ./dist
+
+      # configure-pages подготавливает метаданные деплоя (base URL и т.д.)
+      - name: Настройка GitHub Pages
+        uses: actions/configure-pages@v4
+
+      # upload-pages-artifact упаковывает папку в специальный формат для deploy-pages
+      - name: Загрузка на GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+      - name: Деплой на GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-preview:
+    name: Deploy PR Preview
+    runs-on: ubuntu-latest
+    # Превью деплоим только для событий pull_request
+    if: >
+      github.actor != 'github-actions[bot]' &&
+      github.event_name == 'pull_request'
+    permissions:
+      # contents: write — push собранной документации в ветку gh-pages
+      contents: write
+      # pull-requests: write — публикация комментария со ссылкой на превью
+      pull-requests: write
+    # cancel-in-progress: false — не прерываем деплой на полуслове,
+    # чтобы не оставить ветку gh-pages в непоследовательном состоянии
+    concurrency:
+      group: preview-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        # Необходим для rossjrw/pr-preview-action — он работает с git напрямую
+        uses: actions/checkout@v4
+
+      - name: Скачивание артефакта документации
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.docs-artifact-name }}
+          path: ./dist
+
+      - name: Деплой превью PR
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ./dist
+          # preview-branch — ветка, куда пушится превью (должна быть источником Pages)
+          preview-branch: ${{ inputs.preview-branch }}
+          # umbrella-dir — папка внутри gh-pages для всех превью, не конфликтует с основным сайтом
+          umbrella-dir: pr-preview
+          token: ${{ secrets.token }}

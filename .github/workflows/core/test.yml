@@ -1,0 +1,76 @@
+# Переиспользуемый воркфлоу для запуска тестов Vitest.
+# Генерирует JUnit-отчёт и публикует результаты как GitHub Check Run в PR.
+# Подключение: uses: shoshin-packages/ci/.github/workflows/core/test.yml@main
+
+name: Core Test
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Версия Node.js
+        type: string
+        default: "22"
+      test-script:
+        description: >
+          npm-скрипт для запуска тестов. Должен запускать Vitest.
+          Флаги reporter и outputFile добавляются автоматически.
+        type: string
+        default: test:run
+    secrets:
+      token:
+        # Используется для чтения пакетов из GitHub Packages и создания Check Run.
+        description: GitHub token для доступа к npm-реестру (передавать secrets.GITHUB_TOKEN)
+        required: true
+
+jobs:
+  run-tests:
+    name: Vitest
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      # checks: write — необходим для dorny/test-reporter, чтобы создавать Check Run в PR
+      checks: write
+      # contents: read — минимальные права для checkout
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Composite action: настраивает Node.js, git, .npmrc и запускает npm ci
+      - name: Setup Node.js и npm registry
+        uses: shoshin-packages/ci/.github/actions/npm-setup@main
+        with:
+          token: ${{ secrets.token }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Запуск тестов
+        env:
+          TEST_SCRIPT: ${{ inputs.test-script }}
+        # Два репортера одновременно:
+        # - default: вывод результатов в консоль
+        # - junit: XML-файл для последующей загрузки как артефакта и Check Run
+        run: >
+          npm run "$TEST_SCRIPT" --
+          --reporter=default
+          --reporter=junit
+          --outputFile.junit=./reports/vitest.xml
+
+      - name: Загрузка отчёта тестов
+        uses: actions/upload-artifact@v4
+        # always() — сохраняем артефакт даже при падении тестов (для диагностики)
+        if: always()
+        with:
+          name: test-report
+          path: reports/
+          retention-days: 7
+
+      - name: Публикация результатов тестов в PR
+        uses: dorny/test-reporter@v1
+        # always() — публикуем Check Run даже если тесты упали
+        if: always()
+        with:
+          name: Vitest Results
+          path: reports/vitest.xml
+          # java-junit — формат совместим с JUnit XML, который генерирует Vitest
+          reporter: java-junit

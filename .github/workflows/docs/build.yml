@@ -1,0 +1,68 @@
+# Переиспользуемый воркфлоу для сборки документации (VitePress).
+# Собирает статику и передаёт имя артефакта через output для использования в docs/publish.yml.
+# Подключение: uses: shoshin-packages/ci/.github/workflows/docs/build.yml@main
+
+name: Docs Build
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Версия Node.js
+        type: string
+        default: "22"
+      docs-script:
+        description: npm-скрипт для сборки документации (обычно VitePress build)
+        type: string
+        default: docs:build
+      output-dir:
+        description: Директория с собранной статикой — передаётся как path в upload-artifact
+        type: string
+        default: docs/.vitepress/dist
+    secrets:
+      token:
+        # Используется для чтения пакетов из GitHub Packages (@shoshin-packages).
+        description: GitHub token для доступа к npm-реестру (передавать secrets.GITHUB_TOKEN)
+        required: true
+    outputs:
+      artifact-name:
+        # Передаётся в docs/publish.yml через input docs-artifact-name
+        description: Имя загруженного артефакта документации для передачи в publish-воркфлоу
+        value: ${{ jobs.build-docs.outputs.artifact-name }}
+
+jobs:
+  build-docs:
+    name: Build Docs
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    outputs:
+      # Пробрасываем имя артефакта из step в job output, затем в workflow output
+      artifact-name: ${{ steps.set-output.outputs.artifact-name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Composite action: настраивает Node.js, git, .npmrc и запускает npm ci
+      - name: Setup Node.js и npm registry
+        uses: shoshin-packages/ci/.github/actions/npm-setup@main
+        with:
+          token: ${{ secrets.token }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Сборка документации
+        env:
+          DOCS_SCRIPT: ${{ inputs.docs-script }}
+        run: npm run "$DOCS_SCRIPT"
+
+      - name: Сохранение имени артефакта
+        id: set-output
+        # github.run_id гарантирует уникальность имени артефакта в рамках одного запуска
+        run: echo "artifact-name=docs-build-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+
+      - name: Загрузка артефакта документации
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-build-${{ github.run_id }}
+          path: ${{ inputs.output-dir }}
+          # retention-days: 1 — артефакт нужен только для передачи в publish, долго хранить не нужно
+          retention-days: 1
