@@ -1,0 +1,109 @@
+# Переиспользуемый воркфлоу для линтинга кода.
+# Запускает три независимых проверки параллельно: ESLint, Stylelint, TypeScript.
+# Подключение: uses: shoshin-packages/ci/.github/workflows/core/lint.yml@main
+
+name: Core Lint
+
+on:
+  workflow_call:
+    # Входные параметры, которые передаёт вызывающий воркфлоу
+    inputs:
+      node-version:
+        description: Версия Node.js
+        type: string
+        default: "22"
+      eslint-script:
+        description: npm-скрипт для запуска ESLint (должен поддерживать --format junit)
+        type: string
+        default: lint:app:eslint
+      stylelint-script:
+        description: npm-скрипт для запуска Stylelint
+        type: string
+        default: lint:app:stylelint
+      typecheck-script:
+        description: npm-скрипт для проверки TypeScript типов (tsc --noEmit)
+        type: string
+        default: lint:app:typecheck
+    secrets:
+      token:
+        # Используется для чтения пакетов из GitHub Packages (@shoshin-packages).
+        # Передавать через secrets: inherit в вызывающем воркфлоу.
+        description: GitHub token для доступа к npm-реестру (передавать secrets.GITHUB_TOKEN)
+        required: true
+
+jobs:
+  lint-eslint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    # Пропускаем запуск если коммит сделан CI-ботом (защита от бесконечного цикла)
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Composite action: настраивает Node.js, git, .npmrc и запускает npm ci
+      - name: Setup Node.js и npm registry
+        uses: shoshin-packages/ci/.github/actions/npm-setup@main
+        with:
+          token: ${{ secrets.token }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Запуск ESLint
+        env:
+          ESLINT_SCRIPT: ${{ inputs.eslint-script }}
+        run: |
+          # set +e — не прерываемся при ненулевом exit code ESLint,
+          # чтобы успеть сохранить XML-отчёт даже при наличии ошибок линтинга
+          set +e
+          npm run "$ESLINT_SCRIPT" -- --format junit --output-file reports/eslint.xml
+          EXIT_CODE=$?
+          set -e
+          exit $EXIT_CODE
+
+      - name: Загрузка отчёта ESLint
+        uses: actions/upload-artifact@v4
+        # always() — сохраняем артефакт даже если шаг с ESLint завершился с ошибкой
+        if: always()
+        with:
+          name: eslint-report
+          path: reports/eslint.xml
+          retention-days: 7
+
+  lint-stylelint:
+    name: Stylelint
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js и npm registry
+        uses: shoshin-packages/ci/.github/actions/npm-setup@main
+        with:
+          token: ${{ secrets.token }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Запуск Stylelint
+        env:
+          STYLELINT_SCRIPT: ${{ inputs.stylelint-script }}
+        # Передаём скрипт через env, а не напрямую в run, для защиты от shell injection
+        run: npm run "$STYLELINT_SCRIPT"
+
+  lint-typecheck:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js и npm registry
+        uses: shoshin-packages/ci/.github/actions/npm-setup@main
+        with:
+          token: ${{ secrets.token }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Запуск TypeScript проверки
+        env:
+          TYPECHECK_SCRIPT: ${{ inputs.typecheck-script }}
+        run: npm run "$TYPECHECK_SCRIPT"

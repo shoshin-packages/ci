@@ -1,0 +1,89 @@
+# Переиспользуемый воркфлоу для публикации npm-библиотеки через semantic-release.
+# Анализирует Conventional Commits, вычисляет версию, обновляет CHANGELOG,
+# публикует пакет в GitHub Packages и создаёт GitHub Release с тегом.
+# Подключение: uses: shoshin-packages/ci/.github/workflows/library/publish.yml@main
+
+name: Library Publish
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Версия Node.js
+        type: string
+        default: "22"
+      release-script:
+        description: npm-скрипт для запуска semantic-release
+        type: string
+        default: library:release
+      build-artifact-name:
+        # Получить из output воркфлоу library/build.yml: needs.build.outputs.artifact-name
+        description: Имя артефакта сборки от library/build.yml (опционально)
+        type: string
+        required: false
+    secrets:
+      token:
+        # Требует прав: contents: write (теги, релизы), packages: write (публикация).
+        # Для push тегов необходим PAT или GITHUB_TOKEN с нужными permissions.
+        description: GitHub token с правами на создание релизов и публикацию пакетов
+        required: true
+
+jobs:
+  publish-package:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      # contents: write — создание тегов, релизов и push CHANGELOG.md
+      contents: write
+      # packages: write — публикация пакета в GitHub Packages
+      packages: write
+    steps:
+      - name: Checkout с полной историей
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 — загружаем всю историю коммитов и теги,
+          # semantic-release анализирует коммиты с момента последнего тега
+          fetch-depth: 0
+          token: ${{ secrets.token }}
+
+      # Composite action: настраивает Node.js, git, .npmrc и запускает npm ci
+      - name: Setup Node.js и npm registry
+        uses: shoshin-packages/ci/.github/actions/npm-setup@main
+        with:
+          token: ${{ secrets.token }}
+          node-version: ${{ inputs.node-version }}
+
+      - name: Загрузка артефакта сборки
+        uses: actions/download-artifact@v4
+        # Пропускаем шаг если имя артефакта не передано (проект без компиляции)
+        if: inputs.build-artifact-name != ''
+        with:
+          name: ${{ inputs.build-artifact-name }}
+          path: dist/
+
+      - name: Настройка npm для публикации
+        env:
+          NPM_TOKEN: ${{ secrets.token }}
+        # Записываем токен в локальный .npmrc проекта для публикации пакета.
+        # Глобальный ~/.npmrc уже настроен в npm-setup для чтения зависимостей.
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
+
+      - name: Настройка git remote с токеном
+        env:
+          GIT_TOKEN: ${{ secrets.token }}
+        # semantic-release создаёт коммит с CHANGELOG и пушит тег —
+        # для этого нужен remote с встроенным токеном вместо SSH
+        run: |
+          git remote set-url origin \
+            "https://x-access-token:${GIT_TOKEN}@github.com/${{ github.repository }}.git"
+
+      - name: Запуск semantic-release
+        env:
+          RELEASE_SCRIPT: ${{ inputs.release-script }}
+          # GITHUB_TOKEN — используется semantic-release для создания GitHub Release
+          GITHUB_TOKEN: ${{ secrets.token }}
+          # NODE_AUTH_TOKEN — используется @semantic-release/npm для публикации пакета
+          NODE_AUTH_TOKEN: ${{ secrets.token }}
+        run: npm run "$RELEASE_SCRIPT"
