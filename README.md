@@ -6,7 +6,7 @@
 
 - Реализованы как [Reusable Workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows) — подключаются одной строкой
 - Composite Action `npm-setup` инкапсулирует общую логику: Node.js, git, npm registry, `npm ci`
-- Кеширование npm-пакетов через `actions/setup-node` (ключ по хэшу `package-lock.json`)
+- Кешируются npm-пакеты через `actions/setup-node` (ключ по хэшу `package-lock.json`)
 - npm-реестр: [GitHub Packages](https://github.com/features/packages) (`@shoshin-packages` scope)
 - PR-превью документации через [pr-preview-action](https://github.com/rossjrw/pr-preview-action)
 

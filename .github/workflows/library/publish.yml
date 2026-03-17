@@ -24,7 +24,6 @@ on:
     secrets:
       token:
         # Требует прав: contents: write (теги, релизы), packages: write (публикация).
-        # Для push тегов необходим PAT или GITHUB_TOKEN с нужными permissions.
         description: GitHub token с правами на создание релизов и публикацию пакетов
         required: true
 
