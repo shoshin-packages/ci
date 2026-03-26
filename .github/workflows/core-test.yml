@@ -1,6 +1,6 @@
 # Переиспользуемый воркфлоу для запуска тестов Vitest.
 # Генерирует JUnit-отчёт и публикует результаты как GitHub Check Run в PR.
-# Подключение: uses: shoshin-packages/ci/.github/workflows/core/test.yml@main
+# Подключение: uses: shoshin-packages/ci/.github/workflows/core-test.yml@main
 
 name: Core Test
 

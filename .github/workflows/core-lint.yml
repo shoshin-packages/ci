@@ -1,6 +1,6 @@
 # Переиспользуемый воркфлоу для линтинга кода.
 # Запускает три независимых проверки параллельно: ESLint, Stylelint, TypeScript.
-# Подключение: uses: shoshin-packages/ci/.github/workflows/core/lint.yml@main
+# Подключение: uses: shoshin-packages/ci/.github/workflows/core-lint.yml@main
 
 name: Core Lint
 
