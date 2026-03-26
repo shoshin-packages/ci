@@ -15,20 +15,15 @@
 ```text
 .github/
 ├── actions/
-│   └── npm-setup/        # composite action: Node.js + git + npm registry + npm ci
+│   └── npm-setup/           # composite action: Node.js + git + npm registry + npm ci
 │
 └── workflows/
-    ├── core/
-    │   ├── lint.yml      # ESLint + Stylelint + TypeScript (параллельно)
-    │   └── test.yml      # Vitest + JUnit отчёт + GitHub Check Run
-    │
-    ├── library/
-    │   ├── build.yml     # сборка npm-библиотеки → артефакт dist/
-    │   └── publish.yml   # semantic-release → GitHub Packages + GitHub Release
-    │
-    └── docs/
-        ├── build.yml     # VitePress сборка → артефакт
-        └── publish.yml   # GitHub Pages (main) + PR превью
+    ├── core-lint.yml        # ESLint + Stylelint + TypeScript (параллельно)
+    ├── core-test.yml        # Vitest + JUnit отчёт + GitHub Check Run
+    ├── library-build.yml    # сборка npm-библиотеки → артефакт dist/
+    ├── library-publish.yml  # semantic-release → GitHub Packages + GitHub Release
+    ├── docs-build.yml       # VitePress сборка → артефакт
+    └── docs-publish.yml     # GitHub Pages (main) + PR превью
 ```
 
 ## Требования
@@ -54,20 +49,20 @@ on:
 
 jobs:
   lint:
-    uses: shoshin-packages/ci/.github/workflows/core/lint.yml@main
+    uses: shoshin-packages/ci/.github/workflows/core-lint.yml@main
     secrets: inherit
 
   test:
-    uses: shoshin-packages/ci/.github/workflows/core/test.yml@main
+    uses: shoshin-packages/ci/.github/workflows/core-test.yml@main
     secrets: inherit
 
   build:
-    uses: shoshin-packages/ci/.github/workflows/library/build.yml@main
+    uses: shoshin-packages/ci/.github/workflows/library-build.yml@main
     secrets: inherit
 
   publish:
     needs: build
-    uses: shoshin-packages/ci/.github/workflows/library/publish.yml@main
+    uses: shoshin-packages/ci/.github/workflows/library-publish.yml@main
     with:
       build-artifact-name: ${{ needs.build.outputs.artifact-name }}
     secrets: inherit

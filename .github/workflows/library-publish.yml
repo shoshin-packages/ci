@@ -1,7 +1,7 @@
 # Переиспользуемый воркфлоу для публикации npm-библиотеки через semantic-release.
 # Анализирует Conventional Commits, вычисляет версию, обновляет CHANGELOG,
 # публикует пакет в GitHub Packages и создаёт GitHub Release с тегом.
-# Подключение: uses: shoshin-packages/ci/.github/workflows/library/publish.yml@main
+# Подключение: uses: shoshin-packages/ci/.github/workflows/library-publish.yml@main
 
 name: Library Publish
 

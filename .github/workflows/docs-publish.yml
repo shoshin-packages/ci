@@ -2,7 +2,7 @@
 # На main/master — деплой на GitHub Pages через официальные actions.
 # На PR — деплой превью через rossjrw/pr-preview-action (замена GitLab Pages path_prefix).
 # Превью доступно по адресу: https://<org>.github.io/<repo>/pr-preview/pr-<number>/
-# Подключение: uses: shoshin-packages/ci/.github/workflows/docs/publish.yml@main
+# Подключение: uses: shoshin-packages/ci/.github/workflows/docs-publish.yml@main
 
 name: Docs Publish
 
